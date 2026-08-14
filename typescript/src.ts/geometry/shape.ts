@@ -149,6 +149,16 @@ export abstract class Shape {
                 const vox_size = rawSet.coVoxelSize(handle);
                 return new Voxels(vox_data, vox_size);
 
+            // #if DIM2
+            case RawShapeType.AnalyticProfile:
+                return new AnalyticProfile(
+                    rawSet.coAnalyticProfileKinds(handle),
+                    rawSet.coAnalyticProfileData(handle),
+                    rawSet.coAnalyticProfileThickness(handle),
+                    rawSet.coAnalyticProfileSolid(handle),
+                );
+            // #endif
+
             case RawShapeType.TriMesh:
                 vs = rawSet.coVertices(handle);
                 indices = rawSet.coIndices(handle);
@@ -341,6 +351,16 @@ export abstract class Shape {
                     const vox_data = rawShape.voxelData();
                     const vox_size = VectorOps.fromRaw(rawShape.voxelSize());
                     return new Voxels(vox_data, vox_size);
+
+                // #if DIM2
+                case RawShapeType.AnalyticProfile:
+                    return new AnalyticProfile(
+                        rawShape.analyticProfileKinds(),
+                        rawShape.analyticProfileData(),
+                        rawShape.analyticProfileThickness(),
+                        rawShape.analyticProfileSolid(),
+                    );
+                // #endif
 
                 case RawShapeType.TriMesh:
                     vs = rawShape.vertices();
@@ -772,6 +792,7 @@ export enum ShapeType {
     RoundConvexPolygon = 12,
     HalfSpace = 13,
     Voxels = 14,
+    AnalyticProfile = 15,
 }
 
 // #endif
@@ -911,6 +932,33 @@ export class Ball extends Shape {
         return RawShape.ball(this.radius);
     }
 }
+
+// #if DIM2
+/** A closed 2D profile made from exact line and circular-arc segments. */
+export class AnalyticProfile extends Shape {
+    readonly type = ShapeType.AnalyticProfile;
+
+    constructor(
+        public readonly segmentKinds: Uint32Array,
+        public readonly segmentData: Float32Array,
+        public readonly thickness: number,
+        public readonly solid: boolean,
+    ) {
+        super();
+    }
+
+    public intoRaw(): RawShape {
+        const raw = RawShape.analyticProfile(
+            this.segmentKinds,
+            this.segmentData,
+            this.thickness,
+            this.solid,
+        );
+        if (!raw) throw new Error("Invalid analytic profile");
+        return raw;
+    }
+}
+// #endif
 
 export class HalfSpace extends Shape {
     readonly type = ShapeType.HalfSpace;

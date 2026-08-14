@@ -3,11 +3,15 @@
         "outDir": "./pkg",
         "module": "ES6",
         "target": "es6",
-        "lib": ["es6", "ESNext.Disposable"],
+        "lib": ["es6", "dom", "ESNext.Disposable"],
         "moduleResolution": "node",
         "sourceMap": true,
         "declaration": true,
-        "rootDirs": ["./pkg", "./pkg/src"]
+        "rootDirs": ["./pkg", "./pkg/src"],
+        "rootDir": "./pkg/src",
+        "types": [],
+        "strict": false,
+        "ignoreDeprecations": "6.0"
     },
     "files": ["./pkg/src/rapier.ts"]
 }

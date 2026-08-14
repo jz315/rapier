@@ -2,6 +2,10 @@ use crate::dynamics::RawRigidBodySet;
 use crate::utils::{self, FlatHandle};
 use rapier::geometry::{ContactManifold, ContactPair, NarrowPhase};
 use rapier::math::Real;
+#[cfg(feature = "dim2")]
+use rapier::parry::query::{DefaultQueryDispatcher, QueryDispatcher};
+#[cfg(feature = "dim2")]
+use studio_rapier_profile::AnalyticProfileDispatcher;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -11,6 +15,11 @@ pub struct RawNarrowPhase(pub(crate) NarrowPhase);
 impl RawNarrowPhase {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
+        #[cfg(feature = "dim2")]
+        return RawNarrowPhase(NarrowPhase::with_query_dispatcher(
+            AnalyticProfileDispatcher.chain(DefaultQueryDispatcher),
+        ));
+        #[cfg(feature = "dim3")]
         RawNarrowPhase(NarrowPhase::new())
     }
 

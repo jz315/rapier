@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/rapier2d",
+    "crates/studio-rapier-profile",
     "crates/rapier2d-f64",
     "crates/rapier_testbed2d",
     "crates/rapier_testbed2d-f64",

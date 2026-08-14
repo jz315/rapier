@@ -1,13 +1,44 @@
 use crate::geometry::{RawPointProjection, RawRayIntersection, RawShapeCastHit, RawShapeContact};
 use crate::math::{RawRotation, RawVector};
 use rapier::geometry::{Shape, SharedShape, TriMeshFlags};
-use rapier::math::{IVector, Pose, Rotation, Vector, DIM};
+use rapier::math::{DIM, IVector, Pose, Rotation, Vector};
 use rapier::parry::query;
 use rapier::parry::query::{Ray, ShapeCastOptions};
-use rapier::parry::transformation::vhacd::{VHACDParameters, VHACD};
+use rapier::parry::transformation::vhacd::{VHACD, VHACDParameters};
 #[cfg(feature = "dim3")]
 use rapier::parry::utils::Array2;
+#[cfg(feature = "dim2")]
+use studio_rapier_profile::{AnalyticProfile, ProfileMode, ProfileSegment};
 use wasm_bindgen::prelude::*;
+
+#[cfg(feature = "dim2")]
+fn profile_kinds(profile: &AnalyticProfile) -> Vec<u32> {
+    profile
+        .segments()
+        .iter()
+        .map(|segment| match segment {
+            ProfileSegment::Line { .. } => 0,
+            ProfileSegment::Arc { .. } => 1,
+        })
+        .collect()
+}
+
+#[cfg(feature = "dim2")]
+fn profile_data(profile: &AnalyticProfile) -> Vec<f32> {
+    profile
+        .segments()
+        .iter()
+        .flat_map(|segment| match segment {
+            ProfileSegment::Line { start, end } => [start.x, start.y, end.x, end.y, 0.0, 0.0],
+            ProfileSegment::Arc {
+                center,
+                radius,
+                start_angle,
+                sweep,
+            } => [center.x, center.y, *radius, *start_angle, *sweep, 0.0],
+        })
+        .collect()
+}
 
 pub trait SharedShapeUtility {
     fn castShape(
@@ -178,6 +209,7 @@ pub enum RawShapeType {
     RoundConvexPolygon = 12,
     HalfSpace = 13,
     Voxels = 14,
+    AnalyticProfile = 15,
 }
 
 #[wasm_bindgen]
@@ -301,6 +333,45 @@ pub struct RawShape(pub(crate) SharedShape);
 
 #[wasm_bindgen]
 impl RawShape {
+    #[cfg(feature = "dim2")]
+    pub fn analyticProfile(
+        kinds: Vec<u32>,
+        data: Vec<f32>,
+        thickness: f32,
+        solid: bool,
+    ) -> Option<RawShape> {
+        if data.len() != kinds.len() * 6 {
+            return None;
+        }
+        let segments = kinds
+            .iter()
+            .enumerate()
+            .map(|(index, kind)| {
+                let values = &data[index * 6..index * 6 + 6];
+                match kind {
+                    0 => Some(ProfileSegment::Line {
+                        start: Vector::new(values[0], values[1]),
+                        end: Vector::new(values[2], values[3]),
+                    }),
+                    1 => Some(ProfileSegment::Arc {
+                        center: Vector::new(values[0], values[1]),
+                        radius: values[2],
+                        start_angle: values[3],
+                        sweep: values[4],
+                    }),
+                    _ => None,
+                }
+            })
+            .collect::<Option<Vec<_>>>()?;
+        let mode = if solid {
+            ProfileMode::Solid
+        } else {
+            ProfileMode::Outline
+        };
+        AnalyticProfile::new(segments, thickness, mode)
+            .map(|profile| RawShape(SharedShape::new(profile)))
+    }
+
     pub fn shapeType(&self) -> RawShapeType {
         match self.0.shape_type() {
             rapier::geometry::ShapeType::Ball => RawShapeType::Ball,
@@ -334,8 +405,46 @@ impl RawShape {
             }
             #[cfg(feature = "dim2")]
             rapier::geometry::ShapeType::RoundConvexPolygon => RawShapeType::RoundConvexPolygon,
-            rapier::geometry::ShapeType::Custom => panic!("Not yet implemented."),
+            rapier::geometry::ShapeType::Custom => {
+                #[cfg(feature = "dim2")]
+                if self.0.as_shape::<AnalyticProfile>().is_some() {
+                    return RawShapeType::AnalyticProfile;
+                }
+                panic!("Unknown custom shape type.")
+            }
         }
+    }
+
+    #[cfg(feature = "dim2")]
+    pub fn analyticProfileKinds(&self) -> Vec<u32> {
+        self.0
+            .as_shape::<AnalyticProfile>()
+            .map(profile_kinds)
+            .unwrap_or_default()
+    }
+
+    #[cfg(feature = "dim2")]
+    pub fn analyticProfileData(&self) -> Vec<f32> {
+        self.0
+            .as_shape::<AnalyticProfile>()
+            .map(profile_data)
+            .unwrap_or_default()
+    }
+
+    #[cfg(feature = "dim2")]
+    pub fn analyticProfileThickness(&self) -> f32 {
+        self.0
+            .as_shape::<AnalyticProfile>()
+            .map(|profile| profile.half_thickness() * 2.0)
+            .unwrap_or(0.0)
+    }
+
+    #[cfg(feature = "dim2")]
+    pub fn analyticProfileSolid(&self) -> bool {
+        self.0
+            .as_shape::<AnalyticProfile>()
+            .map(|profile| profile.mode() == ProfileMode::Solid)
+            .unwrap_or(false)
     }
 
     pub fn halfspaceNormal(&self) -> Option<RawVector> {

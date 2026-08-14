@@ -7,6 +7,9 @@ import {
     Shape,
     Cuboid,
     Ball,
+    // #if DIM2
+    AnalyticProfile,
+    // #endif
     ShapeType,
     Capsule,
     Voxels,
@@ -1448,6 +1451,25 @@ export class ColliderDesc {
         const shape = new Ball(radius);
         return new ColliderDesc(shape);
     }
+
+    // #if DIM2
+    /** Creates a collider from exact line and circular-arc segments. */
+    public static analyticProfile(
+        segmentKinds: Uint32Array,
+        segmentData: Float32Array,
+        thickness: number,
+        solid: boolean,
+    ): ColliderDesc {
+        return new ColliderDesc(
+            new AnalyticProfile(
+                segmentKinds,
+                segmentData,
+                thickness,
+                solid,
+            ),
+        );
+    }
+    // #endif
 
     /**
      * Create a new collider descriptor with a capsule shape.

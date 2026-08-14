@@ -1,6 +1,6 @@
+use crate::geometry::shape::SharedShapeUtility;
 #[cfg(feature = "dim3")]
 use crate::geometry::shape::normalized_convex_polyhedron_mesh;
-use crate::geometry::shape::SharedShapeUtility;
 use crate::geometry::{
     RawColliderSet, RawColliderShapeCastHit, RawPointProjection, RawRayIntersection, RawShape,
     RawShapeCastHit, RawShapeContact, RawShapeType,
@@ -13,7 +13,38 @@ use rapier::math::{IVector, Pose, Real, Rotation, Vector};
 use rapier::parry::query;
 use rapier::parry::query::ShapeCastOptions;
 use rapier::pipeline::{ActiveEvents, ActiveHooks};
+#[cfg(feature = "dim2")]
+use studio_rapier_profile::{AnalyticProfile, ProfileMode, ProfileSegment};
 use wasm_bindgen::prelude::*;
+
+#[cfg(feature = "dim2")]
+fn profile_kinds(profile: &AnalyticProfile) -> Vec<u32> {
+    profile
+        .segments()
+        .iter()
+        .map(|segment| match segment {
+            ProfileSegment::Line { .. } => 0,
+            ProfileSegment::Arc { .. } => 1,
+        })
+        .collect()
+}
+
+#[cfg(feature = "dim2")]
+fn profile_data(profile: &AnalyticProfile) -> Vec<f32> {
+    profile
+        .segments()
+        .iter()
+        .flat_map(|segment| match segment {
+            ProfileSegment::Line { start, end } => [start.x, start.y, end.x, end.y, 0.0, 0.0],
+            ProfileSegment::Arc {
+                center,
+                radius,
+                start_angle,
+                sweep,
+            } => [center.x, center.y, *radius, *start_angle, *sweep, 0.0],
+        })
+        .collect()
+}
 
 #[wasm_bindgen]
 impl RawColliderSet {
@@ -266,7 +297,53 @@ impl RawColliderSet {
             ShapeType::RoundConvexPolyhedron => RawShapeType::RoundConvexPolyhedron,
             #[cfg(feature = "dim2")]
             ShapeType::RoundConvexPolygon => RawShapeType::RoundConvexPolygon,
-            ShapeType::Custom => panic!("Not yet implemented."),
+            ShapeType::Custom => {
+                #[cfg(feature = "dim2")]
+                if co.shape().as_shape::<AnalyticProfile>().is_some() {
+                    return RawShapeType::AnalyticProfile;
+                }
+                panic!("Unknown custom shape type.")
+            }
+        })
+    }
+
+    #[cfg(feature = "dim2")]
+    pub fn coAnalyticProfileKinds(&self, handle: FlatHandle) -> Vec<u32> {
+        self.map(handle, |co| {
+            co.shape()
+                .as_shape::<AnalyticProfile>()
+                .map(profile_kinds)
+                .unwrap_or_default()
+        })
+    }
+
+    #[cfg(feature = "dim2")]
+    pub fn coAnalyticProfileData(&self, handle: FlatHandle) -> Vec<f32> {
+        self.map(handle, |co| {
+            co.shape()
+                .as_shape::<AnalyticProfile>()
+                .map(profile_data)
+                .unwrap_or_default()
+        })
+    }
+
+    #[cfg(feature = "dim2")]
+    pub fn coAnalyticProfileThickness(&self, handle: FlatHandle) -> f32 {
+        self.map(handle, |co| {
+            co.shape()
+                .as_shape::<AnalyticProfile>()
+                .map(|profile| profile.half_thickness() * 2.0)
+                .unwrap_or(0.0)
+        })
+    }
+
+    #[cfg(feature = "dim2")]
+    pub fn coAnalyticProfileSolid(&self, handle: FlatHandle) -> bool {
+        self.map(handle, |co| {
+            co.shape()
+                .as_shape::<AnalyticProfile>()
+                .map(|profile| profile.mode() == ProfileMode::Solid)
+                .unwrap_or(false)
         })
     }
 
