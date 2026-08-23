@@ -79,6 +79,9 @@ fn routed_rope_solves_inside_the_native_pgs() {
         .get(rope)
         .expect("rope")
         .current_length();
+    let slack_state = pipeline.routed_rope_constraints.get(rope).expect("rope");
+    assert!(!slack_state.active());
+    assert_eq!(slack_state.step_impulse(), 0.0);
     pipeline
         .routed_rope_constraints
         .get_mut(rope)
@@ -104,6 +107,38 @@ fn routed_rope_solves_inside_the_native_pgs() {
     assert_eq!(state.status(), crate::dynamics::RoutedRopeStatus::Valid);
     assert!(state.step_impulse() > 0.0);
     assert!(state.length_error() <= 1.0e-4, "{}", state.length_error());
+
+    bodies[endpoint_a].sleep();
+    bodies[endpoint_b].sleep();
+    pipeline
+        .routed_rope_constraints
+        .get_mut(rope)
+        .expect("rope")
+        .max_length -= 0.01;
+    pipeline.step(
+        Vector::ZERO,
+        &params,
+        &mut islands,
+        &mut broad_phase,
+        &mut narrow_phase,
+        &mut bodies,
+        &mut colliders,
+        &mut impulse_joints,
+        &mut multibody_joints,
+        &mut ccd,
+        &(),
+        &(),
+    );
+    assert!(!bodies[endpoint_a].is_sleeping());
+    assert!(!bodies[endpoint_b].is_sleeping());
+    assert!(
+        pipeline
+            .routed_rope_constraints
+            .get(rope)
+            .expect("rope")
+            .step_impulse()
+            > 0.0
+    );
 }
 
 #[cfg(all(feature = "alloc", feature = "dim2"))]
