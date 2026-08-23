@@ -251,6 +251,68 @@ pub(super) fn resolve_route(
 mod tests {
     use super::*;
 
+    fn numbers(value: &str) -> Vec<Real> {
+        value
+            .split(':')
+            .map(|part| part.parse::<Real>().expect("golden number"))
+            .collect()
+    }
+
+    #[test]
+    fn matches_shared_typescript_golden_routes() {
+        for line in include_str!("golden_routes.csv").lines() {
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let columns: Vec<_> = line.split(',').collect();
+            let endpoint_a = Vector::new(
+                columns[2].parse().expect("a.x"),
+                columns[3].parse().expect("a.y"),
+            );
+            let endpoint_b = Vector::new(
+                columns[4].parse().expect("b.x"),
+                columns[5].parse().expect("b.y"),
+            );
+            let wheels: Vec<_> = columns[6]
+                .split(';')
+                .map(|encoded| {
+                    let fields: Vec<_> = encoded.split(':').collect();
+                    RoutedRopePulleyGeometry {
+                        center: Vector::new(
+                            fields[0].parse().expect("wheel.x"),
+                            fields[1].parse().expect("wheel.y"),
+                        ),
+                        radius: fields[2].parse().expect("wheel radius"),
+                        winding: if fields[3] == "cw" {
+                            RoutedRopeWinding::Clockwise
+                        } else {
+                            RoutedRopeWinding::Counterclockwise
+                        },
+                    }
+                })
+                .collect();
+            let resolved = resolve_route(endpoint_a, endpoint_b, &wheels);
+            if columns[1] == "pulley-overlap" {
+                assert_eq!(resolved.unwrap_err(), RoutedRopeStatus::PulleyOverlap);
+                continue;
+            }
+            let route = resolved.unwrap_or_else(|status| panic!("{}: {status:?}", columns[0]));
+            let expected_length: Real = columns[7].parse().expect("length");
+            assert!((route.total_length - expected_length).abs() < 2.0e-6);
+            let expected_endpoints = [
+                Vector::new(columns[8].parse().unwrap(), columns[9].parse().unwrap()),
+                Vector::new(columns[10].parse().unwrap(), columns[11].parse().unwrap()),
+            ];
+            for (actual, expected) in route.gradients[..2].iter().zip(expected_endpoints) {
+                assert!((*actual - expected).length() < 2.0e-6);
+            }
+            for (actual, encoded) in route.gradients[2..].iter().zip(columns[12].split(';')) {
+                let expected = numbers(encoded);
+                assert!((*actual - Vector::new(expected[0], expected[1])).length() < 2.0e-6);
+            }
+        }
+    }
+
     #[test]
     fn resolves_a_fixed_pulley_route_and_gradients() {
         let wheel = RoutedRopePulleyGeometry {

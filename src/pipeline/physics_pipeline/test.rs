@@ -106,6 +106,156 @@ fn routed_rope_solves_inside_the_native_pgs() {
     assert!(state.length_error() <= 1.0e-4, "{}", state.length_error());
 }
 
+#[cfg(all(feature = "alloc", feature = "dim2"))]
+#[test]
+fn routed_rope_local_anchor_generates_angular_impulse() {
+    let mut colliders = ColliderSet::new();
+    let mut joints = ImpulseJointSet::new();
+    let mut multibodies = MultibodyJointSet::new();
+    let mut pipeline = PhysicsPipeline::new();
+    let mut broad_phase = BroadPhaseBvh::new();
+    let mut narrow_phase = NarrowPhase::new();
+    let mut bodies = RigidBodySet::new();
+    let mut islands = IslandManager::new();
+    let body = bodies.insert(
+        RigidBodyBuilder::dynamic()
+            .translation(Vector::new(-1.0, 0.0))
+            .build(),
+    );
+    colliders.insert_with_parent(ColliderBuilder::cuboid(0.2, 0.2), body, &mut bodies);
+    let rope = pipeline
+        .routed_rope_constraints
+        .insert(RoutedRopeConstraint::new(
+            RoutedRopePoint::Body {
+                body,
+                local_anchor: Vector::new(0.0, 0.5),
+            },
+            RoutedRopePoint::World(Vector::new(0.0, -1.0)),
+            vec![RoutedRopePulley {
+                center: RoutedRopePoint::World(Vector::ZERO),
+                radius: 0.2,
+                winding: RoutedRopeWinding::Clockwise,
+            }],
+            10.0,
+        ));
+    let mut params = IntegrationParameters::default();
+    params.dt = 1.0 / 120.0;
+    let mut ccd = CCDSolver::new();
+    for initialize in [true, false] {
+        if !initialize {
+            let length = pipeline
+                .routed_rope_constraints
+                .get(rope)
+                .unwrap()
+                .current_length();
+            pipeline
+                .routed_rope_constraints
+                .get_mut(rope)
+                .unwrap()
+                .max_length = length;
+            bodies[body].set_linvel(Vector::new(-1.0, 0.0), true);
+        }
+        pipeline.step(
+            Vector::ZERO,
+            &params,
+            &mut islands,
+            &mut broad_phase,
+            &mut narrow_phase,
+            &mut bodies,
+            &mut colliders,
+            &mut joints,
+            &mut multibodies,
+            &mut ccd,
+            &(),
+            &(),
+        );
+    }
+    assert!(
+        pipeline
+            .routed_rope_constraints
+            .get(rope)
+            .unwrap()
+            .step_impulse()
+            > 0.0
+    );
+    assert!(bodies[body].angvel() < -1.0e-4);
+}
+
+#[cfg(all(feature = "alloc", feature = "dim2"))]
+#[test]
+fn ideal_pulley_center_does_not_apply_angular_impulse() {
+    let mut colliders = ColliderSet::new();
+    let mut joints = ImpulseJointSet::new();
+    let mut multibodies = MultibodyJointSet::new();
+    let mut pipeline = PhysicsPipeline::new();
+    let mut broad_phase = BroadPhaseBvh::new();
+    let mut narrow_phase = NarrowPhase::new();
+    let mut bodies = RigidBodySet::new();
+    let mut islands = IslandManager::new();
+    let pulley_body = bodies.insert(
+        RigidBodyBuilder::dynamic()
+            .translation(Vector::new(-0.5, -1.0))
+            .build(),
+    );
+    colliders.insert_with_parent(ColliderBuilder::cuboid(0.2, 0.2), pulley_body, &mut bodies);
+    let rope = pipeline
+        .routed_rope_constraints
+        .insert(RoutedRopeConstraint::new(
+            RoutedRopePoint::World(Vector::new(-1.0, 0.0)),
+            RoutedRopePoint::World(Vector::new(1.0, 0.0)),
+            vec![RoutedRopePulley {
+                center: RoutedRopePoint::Body {
+                    body: pulley_body,
+                    local_anchor: Vector::new(0.5, 0.0),
+                },
+                radius: 0.2,
+                winding: RoutedRopeWinding::Clockwise,
+            }],
+            10.0,
+        ));
+    let mut params = IntegrationParameters::default();
+    params.dt = 1.0 / 120.0;
+    let mut ccd = CCDSolver::new();
+    for initialize in [true, false] {
+        if !initialize {
+            let length = pipeline
+                .routed_rope_constraints
+                .get(rope)
+                .unwrap()
+                .current_length();
+            pipeline
+                .routed_rope_constraints
+                .get_mut(rope)
+                .unwrap()
+                .max_length = length;
+            bodies[pulley_body].set_linvel(Vector::new(0.0, -1.0), true);
+        }
+        pipeline.step(
+            Vector::ZERO,
+            &params,
+            &mut islands,
+            &mut broad_phase,
+            &mut narrow_phase,
+            &mut bodies,
+            &mut colliders,
+            &mut joints,
+            &mut multibodies,
+            &mut ccd,
+            &(),
+            &(),
+        );
+    }
+    assert!(
+        pipeline
+            .routed_rope_constraints
+            .get(rope)
+            .unwrap()
+            .step_impulse()
+            > 0.0
+    );
+    assert!(bodies[pulley_body].angvel().abs() < 1.0e-6);
+}
+
 #[test]
 fn kinematic_and_fixed_contact_crash() {
     let mut colliders = ColliderSet::new();
