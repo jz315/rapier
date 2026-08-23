@@ -8,6 +8,24 @@ use crate::pipeline::{RawEventQueue, RawPhysicsHooks};
 use crate::rapier::pipeline::PhysicsPipeline;
 use wasm_bindgen::prelude::*;
 
+#[cfg(feature = "dim2")]
+use crate::rapier::dynamics::{
+    RoutedRopeConstraint, RoutedRopeConstraintHandle, RoutedRopePoint, RoutedRopePulley,
+    RoutedRopeWinding,
+};
+#[cfg(feature = "dim2")]
+use crate::rapier::math::Vector;
+#[cfg(feature = "dim2")]
+use crate::utils::{self, FlatHandle};
+
+#[cfg(feature = "dim2")]
+fn routed_rope_handle(handle: FlatHandle) -> RoutedRopeConstraintHandle {
+    RoutedRopeConstraintHandle::from_raw_parts(
+        handle.to_bits() as u32,
+        (handle.to_bits() >> 32) as u32,
+    )
+}
+
 #[wasm_bindgen]
 pub struct RawPhysicsPipeline(pub(crate) PhysicsPipeline);
 
@@ -30,6 +48,162 @@ impl RawPhysicsPipeline {
 
     pub fn is_profiler_enabled(&self) -> bool {
         self.0.counters.enabled()
+    }
+
+    #[cfg(feature = "dim2")]
+    pub fn createRoutedRopeConstraint(
+        &mut self,
+        maxLength: f32,
+        pointKinds: Vec<u32>,
+        bodyHandles: Vec<FlatHandle>,
+        pointCoordinates: Vec<f32>,
+        pulleyRadii: Vec<f32>,
+        pulleyWindings: Vec<u32>,
+    ) -> Result<FlatHandle, JsValue> {
+        let point_count = pulleyRadii.len() + 2;
+        if !maxLength.is_finite() || maxLength <= 0.0 {
+            return Err(JsValue::from_str("maxLength must be finite and positive"));
+        }
+        if pulleyRadii.is_empty()
+            || pointKinds.len() != point_count
+            || bodyHandles.len() != point_count
+            || pointCoordinates.len() != point_count * 2
+            || pulleyWindings.len() != pulleyRadii.len()
+        {
+            return Err(JsValue::from_str("invalid routed-rope array lengths"));
+        }
+        let point = |index: usize| -> Result<RoutedRopePoint, JsValue> {
+            let coordinates = Vector::new(
+                pointCoordinates[index * 2],
+                pointCoordinates[index * 2 + 1],
+            );
+            if !coordinates.is_finite() {
+                return Err(JsValue::from_str("routed-rope point must be finite"));
+            }
+            match pointKinds[index] {
+                0 => Ok(RoutedRopePoint::World(coordinates)),
+                1 => Ok(RoutedRopePoint::Body {
+                    body: utils::body_handle(bodyHandles[index]),
+                    local_anchor: coordinates,
+                }),
+                _ => Err(JsValue::from_str("unknown routed-rope point kind")),
+            }
+        };
+        let endpoint_a = point(0)?;
+        let endpoint_b = point(1)?;
+        let mut pulleys = Vec::with_capacity(pulleyRadii.len());
+        for index in 0..pulleyRadii.len() {
+            let radius = pulleyRadii[index];
+            if !radius.is_finite() || radius <= 0.0 {
+                return Err(JsValue::from_str("pulley radius must be finite and positive"));
+            }
+            let winding = match pulleyWindings[index] {
+                0 => RoutedRopeWinding::Clockwise,
+                1 => RoutedRopeWinding::Counterclockwise,
+                _ => return Err(JsValue::from_str("unknown pulley winding")),
+            };
+            pulleys.push(RoutedRopePulley {
+                center: point(index + 2)?,
+                radius,
+                winding,
+            });
+        }
+        let handle = self
+            .0
+            .routed_rope_constraints
+            .insert(RoutedRopeConstraint::new(
+                endpoint_a,
+                endpoint_b,
+                pulleys,
+                maxLength,
+            ));
+        Ok(utils::flat_handle(handle.0))
+    }
+
+    #[cfg(feature = "dim2")]
+    pub fn removeRoutedRopeConstraint(&mut self, handle: FlatHandle) -> bool {
+        self.0
+            .routed_rope_constraints
+            .remove(routed_rope_handle(handle))
+            .is_some()
+    }
+
+    #[cfg(feature = "dim2")]
+    pub fn setRoutedRopeConstraintEnabled(
+        &mut self,
+        handle: FlatHandle,
+        enabled: bool,
+    ) -> bool {
+        let Some(constraint) = self
+            .0
+            .routed_rope_constraints
+            .get_mut(routed_rope_handle(handle))
+        else {
+            return false;
+        };
+        constraint.set_enabled(enabled);
+        true
+    }
+
+    #[cfg(feature = "dim2")]
+    pub fn routedRopeConstraintIsValid(&self, handle: FlatHandle) -> bool {
+        self.0
+            .routed_rope_constraints
+            .get(routed_rope_handle(handle))
+            .is_some()
+    }
+
+    #[cfg(feature = "dim2")]
+    pub fn routedRopeConstraintStatus(&self, handle: FlatHandle) -> u32 {
+        self.0
+            .routed_rope_constraints
+            .get(routed_rope_handle(handle))
+            .map(|constraint| constraint.status() as u32)
+            .unwrap_or(u32::MAX)
+    }
+
+    #[cfg(feature = "dim2")]
+    pub fn routedRopeConstraintActive(&self, handle: FlatHandle) -> bool {
+        self.0
+            .routed_rope_constraints
+            .get(routed_rope_handle(handle))
+            .is_some_and(|constraint| constraint.active())
+    }
+
+    #[cfg(feature = "dim2")]
+    pub fn routedRopeConstraintCurrentLength(&self, handle: FlatHandle) -> f32 {
+        self.0
+            .routed_rope_constraints
+            .get(routed_rope_handle(handle))
+            .map(|constraint| constraint.current_length())
+            .unwrap_or(f32::NAN)
+    }
+
+    #[cfg(feature = "dim2")]
+    pub fn routedRopeConstraintError(&self, handle: FlatHandle) -> f32 {
+        self.0
+            .routed_rope_constraints
+            .get(routed_rope_handle(handle))
+            .map(|constraint| constraint.length_error())
+            .unwrap_or(f32::NAN)
+    }
+
+    #[cfg(feature = "dim2")]
+    pub fn routedRopeConstraintSpeed(&self, handle: FlatHandle) -> f32 {
+        self.0
+            .routed_rope_constraints
+            .get(routed_rope_handle(handle))
+            .map(|constraint| constraint.constraint_speed())
+            .unwrap_or(f32::NAN)
+    }
+
+    #[cfg(feature = "dim2")]
+    pub fn routedRopeConstraintStepImpulse(&self, handle: FlatHandle) -> f32 {
+        self.0
+            .routed_rope_constraints
+            .get(routed_rope_handle(handle))
+            .map(|constraint| constraint.step_impulse())
+            .unwrap_or(f32::NAN)
     }
 
     pub fn timing_step(&self) -> f64 {

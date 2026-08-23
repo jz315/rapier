@@ -43,6 +43,11 @@ mod rigid_body_handle;
 #[cfg(feature = "alloc")]
 pub(crate) mod solver;
 
+#[cfg(all(feature = "alloc", feature = "dim2"))]
+mod routed_rope_constraint;
+#[cfg(all(feature = "alloc", feature = "dim2"))]
+pub use self::routed_rope_constraint::*;
+
 #[cfg(feature = "alloc")]
 mod rigid_body;
 #[cfg(feature = "alloc")]

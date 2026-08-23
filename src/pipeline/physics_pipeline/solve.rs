@@ -317,6 +317,9 @@ impl PhysicsPipeline {
             multibody_joints,
         );
 
+        #[cfg(all(feature = "alloc", feature = "dim2"))]
+        self.routed_rope_constraints.prepare(bodies);
+
         self.counters.stages.island_construction_time.pause();
 
         self.counters
@@ -385,6 +388,8 @@ impl PhysicsPipeline {
                 joint_assembly_epoch,
                 multibody_joints,
                 unsafe { contact_color_masks.as_slice() },
+                #[cfg(all(feature = "alloc", feature = "dim2"))]
+                &mut self.routed_rope_constraints,
             );
         }
 

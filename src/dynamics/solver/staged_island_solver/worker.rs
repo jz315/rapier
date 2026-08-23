@@ -426,6 +426,12 @@ pub(super) unsafe fn run_worker(ctx: &SharedCtx, worker_id: usize) {
                             }
                         }
                     }
+                    #[cfg(all(feature = "alloc", feature = "dim2"))]
+                    if ctx.has_routed_ropes {
+                        let routed_ropes = unsafe { &mut *ctx.routed_ropes };
+                        let solver_bodies = unsafe { &(*ctx.velocity_solver).solver_bodies };
+                        routed_ropes.update_substep(params, solver_bodies);
+                    }
                     sync.complete(stage, 1, stage_work);
                 }
                 stage = sync.sync(stage, stage_work);
@@ -646,6 +652,16 @@ pub(super) unsafe fn run_worker(ctx: &SharedCtx, worker_id: usize) {
                         solved_dt + params.dt,
                     )
                 };
+            }
+            #[cfg(all(feature = "alloc", feature = "dim2"))]
+            if ctx.has_routed_ropes {
+                if worker_id == 0 {
+                    let routed_ropes = unsafe { &mut *ctx.routed_ropes };
+                    let solver_bodies = unsafe { &(*ctx.velocity_solver).solver_bodies };
+                    routed_ropes.finish_substep(solver_bodies);
+                    sync.complete(stage, 1, 1);
+                }
+                stage = sync.sync(stage, 1);
             }
         }
 

@@ -157,6 +157,22 @@ pub(super) unsafe fn solve_pass(
         stage = sync.sync(stage, 1);
     }
 
+    // Routed ropes are N-body constraints, so the deterministic first version
+    // runs serially on worker 0 between the ordinary joint and contact stages.
+    #[cfg(all(feature = "alloc", feature = "dim2"))]
+    if ctx.has_routed_ropes {
+        if worker_id == 0 {
+            let routed_ropes = unsafe { &mut *ctx.routed_ropes };
+            let solver_bodies = unsafe { &mut (*ctx.velocity_solver).solver_bodies };
+            if warmstart_joints {
+                routed_ropes.warmstart(solver_bodies);
+            }
+            routed_ropes.solve(solver_bodies, wo_bias);
+            sync.complete(stage, 1, 1);
+        }
+        stage = sync.sync(stage, 1);
+    }
+
     // Contact color stages (ascending color id).
     for (_, chunk_range) in &ctx.color_ranges[group.colors.clone()] {
         let virt = 0..chunk_range.end - chunk_range.start;

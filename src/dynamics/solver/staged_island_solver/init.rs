@@ -47,6 +47,8 @@ impl StagedIslandSolver {
         // The narrow-phase's per-body masks of persistent contact solver colors,
         // used to color the joints in the same color space as the contacts.
         contact_color_masks: &[u128],
+        #[cfg(all(feature = "alloc", feature = "dim2"))]
+        routed_ropes: &mut crate::dynamics::RoutedRopeConstraintSet,
     ) {
         counters.solver.velocity_assembly_time.resume();
         // Substep solve-groups: each group (contiguous constraint-closed awake-body range, keyed
@@ -54,7 +56,17 @@ impl StagedIslandSolver {
         // real substeps buy convergence on high mass ratios, unlike the flat PGS sweeps they
         // replaced. Multibody scenes: one group at max extra (generic tables not group-major yet).
         let island_bodies = islands.island(island_id).bodies();
-        let multi_group = islands.solve_groups.len() >= 2 && multibodies.iter().next().is_none();
+        let multi_group =
+            islands.solve_groups.len() >= 2 && multibodies.iter().next().is_none() && {
+                #[cfg(all(feature = "alloc", feature = "dim2"))]
+                {
+                    !routed_ropes.has_enabled()
+                }
+                #[cfg(not(all(feature = "alloc", feature = "dim2")))]
+                {
+                    true
+                }
+            };
         let max_extra = islands
             .solve_groups
             .first()
@@ -496,6 +508,10 @@ impl StagedIslandSolver {
             any_gyroscopic: &self.any_gyroscopic as *const _,
             any_ccd_active: &self.any_ccd_active as *const _,
             any_bouncy: &self.any_bouncy as *const _,
+            #[cfg(all(feature = "alloc", feature = "dim2"))]
+            routed_ropes: routed_ropes as *mut _,
+            #[cfg(all(feature = "alloc", feature = "dim2"))]
+            has_routed_ropes: routed_ropes.has_enabled(),
         };
 
         let ctx_ref = &ctx;

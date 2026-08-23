@@ -69,6 +69,10 @@ pub struct PhysicsPipeline {
     /// staged workers. On a non-parallel (or wasm) build it runs with one worker
     /// inline on the calling thread.
     staged_solver: crate::dynamics::StagedIslandSolver,
+    /// Native planar routed-rope constraints solved in the same PGS passes as
+    /// joints and contacts.
+    #[cfg(all(feature = "alloc", feature = "dim2"))]
+    pub routed_rope_constraints: crate::dynamics::RoutedRopeConstraintSet,
     /// Handle on the BVH optimization pass running concurrently with the narrow
     /// phase and solver (the `Mutex` only exists to keep the pipeline `Sync`; it is
     /// never contended).
@@ -109,6 +113,8 @@ impl PhysicsPipeline {
             active_body_handles: vec![],
             sleep_observations: Vec::new(),
             staged_solver: crate::dynamics::StagedIslandSolver::new(),
+            #[cfg(all(feature = "alloc", feature = "dim2"))]
+            routed_rope_constraints: crate::dynamics::RoutedRopeConstraintSet::new(),
             #[cfg(feature = "parallel")]
             deferred_bvh: std::sync::Mutex::new(None),
             deferred_bvh_inline: None,

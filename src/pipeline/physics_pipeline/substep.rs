@@ -282,6 +282,8 @@ impl PhysicsPipeline {
         self.counters.reset();
         self.counters.step_started();
         self.quarantine.clear();
+        #[cfg(all(feature = "alloc", feature = "dim2"))]
+        self.routed_rope_constraints.begin_step();
 
         // Apply some of delayed wake-ups.
         self.counters.stages.user_changes.start();
@@ -298,6 +300,9 @@ impl PhysicsPipeline {
         for handle in to_wake_up_iterator {
             islands.wake_up(bodies, handle, true);
         }
+        #[cfg(all(feature = "alloc", feature = "dim2"))]
+        self.routed_rope_constraints
+            .wake_participants(islands, bodies);
 
         // Quarantine user-introduced non-finite state before it reaches the broad-phase.
         self.quarantine.detect_user_changes(bodies, colliders);
@@ -576,6 +581,9 @@ impl PhysicsPipeline {
 
         // Re-insert the modified vector we extracted for the borrow-checker.
         colliders.set_modified(modified_colliders);
+
+        #[cfg(all(feature = "alloc", feature = "dim2"))]
+        self.routed_rope_constraints.refresh_observations(bodies);
 
         self.counters.step_completed();
     }

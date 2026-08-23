@@ -1,5 +1,7 @@
 //! Pipeline stepping regression tests.
 
+#[cfg(all(feature = "alloc", feature = "dim2"))]
+use crate::alloc_prelude::*;
 use crate::dynamics::{
     CCDSolver, ImpulseJointSet, IntegrationParameters, IslandManager, RigidBodyBuilder,
     RigidBodySet,
@@ -10,6 +12,99 @@ use crate::math::Rotation;
 use crate::math::Vector;
 use crate::pipeline::PhysicsPipeline;
 use crate::prelude::{MultibodyJointSet, RevoluteJointBuilder, RigidBodyType};
+
+#[cfg(all(feature = "alloc", feature = "dim2"))]
+use crate::dynamics::{RoutedRopeConstraint, RoutedRopePoint, RoutedRopePulley, RoutedRopeWinding};
+
+#[cfg(all(feature = "alloc", feature = "dim2"))]
+#[test]
+fn routed_rope_solves_inside_the_native_pgs() {
+    let mut colliders = ColliderSet::new();
+    let mut impulse_joints = ImpulseJointSet::new();
+    let mut multibody_joints = MultibodyJointSet::new();
+    let mut pipeline = PhysicsPipeline::new();
+    let mut broad_phase = BroadPhaseBvh::new();
+    let mut narrow_phase = NarrowPhase::new();
+    let mut bodies = RigidBodySet::new();
+    let mut islands = IslandManager::new();
+    let endpoint_a = bodies.insert(
+        RigidBodyBuilder::dynamic()
+            .translation(Vector::new(-1.0, 0.0))
+            .build(),
+    );
+    let endpoint_b = bodies.insert(
+        RigidBodyBuilder::dynamic()
+            .translation(Vector::new(0.0, -1.0))
+            .build(),
+    );
+    colliders.insert_with_parent(ColliderBuilder::ball(0.1), endpoint_a, &mut bodies);
+    colliders.insert_with_parent(ColliderBuilder::ball(0.1), endpoint_b, &mut bodies);
+    let rope = pipeline
+        .routed_rope_constraints
+        .insert(RoutedRopeConstraint::new(
+            RoutedRopePoint::Body {
+                body: endpoint_a,
+                local_anchor: Vector::ZERO,
+            },
+            RoutedRopePoint::Body {
+                body: endpoint_b,
+                local_anchor: Vector::ZERO,
+            },
+            vec![RoutedRopePulley {
+                center: RoutedRopePoint::World(Vector::ZERO),
+                radius: 0.2,
+                winding: RoutedRopeWinding::Clockwise,
+            }],
+            10.0,
+        ));
+    let mut params = IntegrationParameters::default();
+    params.dt = 1.0 / 120.0;
+    let mut ccd = CCDSolver::new();
+    pipeline.step(
+        Vector::ZERO,
+        &params,
+        &mut islands,
+        &mut broad_phase,
+        &mut narrow_phase,
+        &mut bodies,
+        &mut colliders,
+        &mut impulse_joints,
+        &mut multibody_joints,
+        &mut ccd,
+        &(),
+        &(),
+    );
+    let initial_length = pipeline
+        .routed_rope_constraints
+        .get(rope)
+        .expect("rope")
+        .current_length();
+    pipeline
+        .routed_rope_constraints
+        .get_mut(rope)
+        .expect("rope")
+        .max_length = initial_length;
+    bodies[endpoint_a].set_linvel(Vector::new(-1.0, 0.0), true);
+    bodies[endpoint_b].set_linvel(Vector::new(0.0, -1.0), true);
+    pipeline.step(
+        Vector::ZERO,
+        &params,
+        &mut islands,
+        &mut broad_phase,
+        &mut narrow_phase,
+        &mut bodies,
+        &mut colliders,
+        &mut impulse_joints,
+        &mut multibody_joints,
+        &mut ccd,
+        &(),
+        &(),
+    );
+    let state = pipeline.routed_rope_constraints.get(rope).expect("rope");
+    assert_eq!(state.status(), crate::dynamics::RoutedRopeStatus::Valid);
+    assert!(state.step_impulse() > 0.0);
+    assert!(state.length_error() <= 1.0e-4, "{}", state.length_error());
+}
 
 #[test]
 fn kinematic_and_fixed_contact_crash() {

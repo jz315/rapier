@@ -4,6 +4,7 @@ use crate::alloc_prelude::*;
 use contact_constraint::*;
 pub(crate) use joint_constraint::MotorParameters;
 pub use joint_constraint::*;
+pub(crate) use solver_body::SolverBodies;
 use solver_body::SolverVel;
 
 mod categorization;

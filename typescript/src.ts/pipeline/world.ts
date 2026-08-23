@@ -53,6 +53,14 @@ import {SerializationPipeline} from "./serialization_pipeline";
 import {EventQueue} from "./event_queue";
 import {PhysicsHooks} from "./physics_hooks";
 import {DebugRenderBuffers, DebugRenderPipeline} from "./debug_render_pipeline";
+// #if DIM2
+import {
+    RoutedRopeConstraintDesc,
+    RoutedRopeConstraintHandle,
+    RoutedRopeConstraintState,
+    RoutedRopeConstraintStatus,
+} from "./routed_rope_constraint";
+// #endif
 import {
     KinematicCharacterController,
     PidAxesMask,
@@ -200,6 +208,64 @@ export class World {
             raw.takeMultibodyJoints(),
         );
     }
+
+    // #if DIM2
+    /** Creates a native, unilateral routed-rope constraint. */
+    public createRoutedRopeConstraint(
+        desc: RoutedRopeConstraintDesc,
+    ): RoutedRopeConstraintHandle {
+        const points = [
+            desc.endpointA,
+            desc.endpointB,
+            ...desc.pulleys.map((pulley) => pulley.center),
+        ];
+        const pointKinds = points.map((point) => point.kind === "world" ? 0 : 1);
+        const bodyHandles = points.map((point) => point.kind === "body" ? point.body : 0);
+        const coordinates = points.reduce<number[]>((result, point) => {
+            const value = point.kind === "world" ? point.point : point.localAnchor;
+            result.push(value.x, value.y);
+            return result;
+        }, []);
+        return this.physicsPipeline.raw.createRoutedRopeConstraint(
+            desc.maxLength,
+            new Uint32Array(pointKinds),
+            new Float64Array(bodyHandles),
+            new Float32Array(coordinates),
+            new Float32Array(desc.pulleys.map((pulley) => pulley.radius)),
+            new Uint32Array(desc.pulleys.map((pulley) =>
+                pulley.winding === "clockwise" ? 0 : 1,
+            )),
+        );
+    }
+
+    /** Removes a native routed-rope constraint. */
+    public removeRoutedRopeConstraint(handle: RoutedRopeConstraintHandle): boolean {
+        return this.physicsPipeline.raw.removeRoutedRopeConstraint(handle);
+    }
+
+    /** Enables or disables a native routed-rope constraint. */
+    public setRoutedRopeConstraintEnabled(
+        handle: RoutedRopeConstraintHandle,
+        enabled: boolean,
+    ): boolean {
+        return this.physicsPipeline.raw.setRoutedRopeConstraintEnabled(handle, enabled);
+    }
+
+    /** Reads the latest native solver state for a routed rope. */
+    public routedRopeConstraintState(
+        handle: RoutedRopeConstraintHandle,
+    ): RoutedRopeConstraintState | null {
+        if (!this.physicsPipeline.raw.routedRopeConstraintIsValid(handle)) return null;
+        return {
+            status: this.physicsPipeline.raw.routedRopeConstraintStatus(handle) as RoutedRopeConstraintStatus,
+            active: this.physicsPipeline.raw.routedRopeConstraintActive(handle),
+            currentLength: this.physicsPipeline.raw.routedRopeConstraintCurrentLength(handle),
+            error: this.physicsPipeline.raw.routedRopeConstraintError(handle),
+            speed: this.physicsPipeline.raw.routedRopeConstraintSpeed(handle),
+            stepImpulse: this.physicsPipeline.raw.routedRopeConstraintStepImpulse(handle),
+        };
+    }
+    // #endif
 
     /**
      * Takes a snapshot of this world.

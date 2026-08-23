@@ -211,6 +211,10 @@ struct SharedCtx<'a> {
     /// restitution seed (approaching bouncy contact); gates the end-of-step restitution
     /// pass. Published before the first substep barrier, read after it.
     any_bouncy: *const AtomicBool,
+    #[cfg(all(feature = "alloc", feature = "dim2"))]
+    routed_ropes: *mut crate::dynamics::RoutedRopeConstraintSet,
+    #[cfg(all(feature = "alloc", feature = "dim2"))]
+    has_routed_ropes: bool,
 }
 
 unsafe impl Sync for SharedCtx<'_> {}
