@@ -22,6 +22,14 @@ pub struct ImpulseJoint {
     /// The impulses applied by this joint.
     pub impulses: SpatialVector,
 
+    /// The world-space spatial impulse applied to body 1 by this joint during the latest
+    /// physics step. Its angular component is measured about body 1's center of mass.
+    ///
+    /// Unlike [`Self::impulses`], this accumulates every internal PGS substep so it can be
+    /// converted to a step-averaged reaction force and torque.
+    #[cfg_attr(feature = "serde-serialize", serde(skip, default))]
+    pub step_impulses: SpatialVector,
+
     // A joint needs to know its handle to simplify its removal.
     pub(crate) handle: ImpulseJointHandle,
 

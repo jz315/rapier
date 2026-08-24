@@ -347,6 +347,9 @@ impl PhysicsPipeline {
             bodies,
             &mut self.joint_constraint_indices,
         );
+        for edge in impulse_joints.joints_mut() {
+            edge.weight.step_impulses = Default::default();
+        }
         self.counters
             .stages
             .island_constraints_collection_time

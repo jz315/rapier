@@ -1,7 +1,7 @@
 use crate::dynamics::JointGraphEdge;
 use crate::dynamics::solver::joint_constraint::generic_joint_constraint::GenericJointConstraint;
 use crate::dynamics::solver::joint_constraint::joint_velocity_constraint::JointConstraint;
-use crate::math::Real;
+use crate::math::{DVector, Real};
 
 use crate::math::{SIMD_WIDTH, SimdReal};
 
@@ -18,6 +18,18 @@ impl AnyJointConstraintMut<'_> {
             Self::Rigid(c) => c.writeback_impulses(joints_all),
             Self::Generic(c) => c.writeback_impulses(joints_all),
             Self::SimdRigid(c) => c.writeback_impulses(joints_all),
+        }
+    }
+
+    pub fn accumulate_step_impulses(
+        &mut self,
+        jacobians: &DVector,
+        joints_all: &mut [JointGraphEdge],
+    ) {
+        match self {
+            Self::Rigid(c) => c.accumulate_step_impulses(joints_all),
+            Self::Generic(c) => c.accumulate_step_impulses(jacobians, joints_all),
+            Self::SimdRigid(c) => c.accumulate_step_impulses(joints_all),
         }
     }
 }

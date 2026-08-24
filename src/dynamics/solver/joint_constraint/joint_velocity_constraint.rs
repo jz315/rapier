@@ -384,6 +384,23 @@ impl JointConstraint<Real, 1> {
             WritebackId::Motor(i) => joint.data.motors[i].impulse = self.impulse,
         }
     }
+
+    pub fn accumulate_step_impulses(&self, joints_all: &mut [JointGraphEdge]) {
+        let joint = &mut joints_all[self.joint_id[0]].weight;
+        joint.step_impulses[0] += self.lin_jac.x * self.impulse;
+        joint.step_impulses[1] += self.lin_jac.y * self.impulse;
+        #[cfg(feature = "dim2")]
+        {
+            joint.step_impulses[2] += self.ang_jac1 * self.impulse;
+        }
+        #[cfg(feature = "dim3")]
+        {
+            joint.step_impulses[2] += self.lin_jac.z * self.impulse;
+            joint.step_impulses[3] += self.ang_jac1.x * self.impulse;
+            joint.step_impulses[4] += self.ang_jac1.y * self.impulse;
+            joint.step_impulses[5] += self.ang_jac1.z * self.impulse;
+        }
+    }
 }
 
 impl JointConstraint<SimdReal, SIMD_WIDTH> {
@@ -534,6 +551,38 @@ impl JointConstraint<SimdReal, SIMD_WIDTH> {
                 WritebackId::Dof(i) => joint.impulses[i] = impulses[ii],
                 WritebackId::Limit(i) => joint.data.limits[i].impulse = impulses[ii],
                 WritebackId::Motor(i) => joint.data.motors[i].impulse = impulses[ii],
+            }
+        }
+    }
+
+    pub fn accumulate_step_impulses(&self, joints_all: &mut [JointGraphEdge]) {
+        let impulses: [_; SIMD_WIDTH] = self.impulse.into();
+        let lin_x: [_; SIMD_WIDTH] = self.lin_jac.x.into();
+        let lin_y: [_; SIMD_WIDTH] = self.lin_jac.y.into();
+        #[cfg(feature = "dim2")]
+        let ang: [_; SIMD_WIDTH] = self.ang_jac1.into();
+        #[cfg(feature = "dim3")]
+        let lin_z: [_; SIMD_WIDTH] = self.lin_jac.z.into();
+        #[cfg(feature = "dim3")]
+        let ang_x: [_; SIMD_WIDTH] = self.ang_jac1.x.into();
+        #[cfg(feature = "dim3")]
+        let ang_y: [_; SIMD_WIDTH] = self.ang_jac1.y.into();
+        #[cfg(feature = "dim3")]
+        let ang_z: [_; SIMD_WIDTH] = self.ang_jac1.z.into();
+        for (lane, impulse) in impulses.into_iter().enumerate() {
+            let joint = &mut joints_all[self.joint_id[lane]].weight;
+            joint.step_impulses[0] += lin_x[lane] * impulse;
+            joint.step_impulses[1] += lin_y[lane] * impulse;
+            #[cfg(feature = "dim2")]
+            {
+                joint.step_impulses[2] += ang[lane] * impulse;
+            }
+            #[cfg(feature = "dim3")]
+            {
+                joint.step_impulses[2] += lin_z[lane] * impulse;
+                joint.step_impulses[3] += ang_x[lane] * impulse;
+                joint.step_impulses[4] += ang_y[lane] * impulse;
+                joint.step_impulses[5] += ang_z[lane] * impulse;
             }
         }
     }

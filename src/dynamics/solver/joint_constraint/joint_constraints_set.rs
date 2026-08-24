@@ -146,4 +146,11 @@ impl JointConstraintsSet {
             c.writeback_impulses(joints_all);
         }
     }
+
+    pub fn accumulate_step_impulses(&mut self, joints_all: &mut [JointGraphEdge]) {
+        let (jacobians, constraints) = self.iter_constraints_mut();
+        for mut constraint in constraints {
+            constraint.accumulate_step_impulses(jacobians, joints_all);
+        }
+    }
 }

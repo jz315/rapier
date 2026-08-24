@@ -342,6 +342,7 @@ impl ImpulseJointSet {
             body2,
             data,
             impulses: Default::default(),
+            step_impulses: Default::default(),
             handle: ImpulseJointHandle(handle),
             solver_body_ids: [u32::MAX; 2],
             solver_color: crate::geometry::contact_pair::SOLVER_COLOR_UNCOLORED,

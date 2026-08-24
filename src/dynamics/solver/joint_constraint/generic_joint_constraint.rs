@@ -317,6 +317,15 @@ impl GenericJointConstraint {
         }
     }
 
+    pub fn accumulate_step_impulses(&self, jacobians: &DVector, joints_all: &mut [JointGraphEdge]) {
+        if self.joint_id != JointIndex::MAX && self.is_rigid_body1 && self.ndofs1 >= SPATIAL_DIM {
+            let jacobian = &jacobians.as_slice()[self.j_id1..self.j_id1 + SPATIAL_DIM];
+            for (axis, source) in jacobian.iter().enumerate() {
+                joints_all[self.joint_id].weight.step_impulses[axis] += *source * self.impulse;
+            }
+        }
+    }
+
     pub fn remove_bias_from_rhs(&mut self) {
         self.rhs = self.rhs_wo_bias;
     }

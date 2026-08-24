@@ -18,6 +18,13 @@ import {Quaternion} from "../math";
  */
 export type ImpulseJointHandle = number;
 
+export type JointStepImpulse = Readonly<{
+    /** World-space linear impulse applied to body 1. */
+    linear: Vector;
+    /** Angular impulse applied to body 1, measured about its center of mass. */
+    angular: number;
+}>;
+
 /**
  * An enum grouping all possible types of joints:
  *
@@ -159,6 +166,18 @@ export class ImpulseJoint {
      */
     public body2(): RigidBody {
         return this.bodySet.get(this.rawSet.jointBodyHandle2(this.handle));
+    }
+
+    /**
+     * The world-space impulse applied to the first attached body during the latest physics step.
+     * This includes every internal PGS substep, unlike the solver's warm-start value.
+     */
+    public stepImpulse(): JointStepImpulse {
+        this.rawSet.jointStepImpulse(this.handle, scratchBuffer);
+        return {
+            linear: VectorOps.fromBuffer(scratchBuffer),
+            angular: scratchBuffer[2],
+        };
     }
 
     /**

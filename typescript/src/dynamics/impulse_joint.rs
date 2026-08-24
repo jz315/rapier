@@ -22,6 +22,17 @@ impl RawImpulseJointSet {
         self.map(handle, |j| utils::flat_handle(j.body2().0))
     }
 
+    /// The world-space linear and angular impulses applied to the first body by this joint
+    /// during the latest physics step. The angular impulse is measured about its center of mass.
+    #[cfg(feature = "dim2")]
+    pub fn jointStepImpulse(&self, handle: FlatHandle, scratch_buffer: &js_sys::Float32Array) {
+        self.map(handle, |joint| {
+            scratch_buffer.set_index(0, joint.step_impulses[0]);
+            scratch_buffer.set_index(1, joint.step_impulses[1]);
+            scratch_buffer.set_index(2, joint.step_impulses[2]);
+        });
+    }
+
     /// The angular part of the joint’s local frame relative to the first rigid-body it is attached to.
     #[cfg(feature = "dim3")]
     pub fn jointFrameX1(&self, handle: FlatHandle, scratch_buffer: &js_sys::Float32Array) {

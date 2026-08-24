@@ -653,16 +653,20 @@ pub(super) unsafe fn run_worker(ctx: &SharedCtx, worker_id: usize) {
                     )
                 };
             }
-            #[cfg(all(feature = "alloc", feature = "dim2"))]
-            if ctx.has_routed_ropes {
-                if worker_id == 0 {
+            if worker_id == 0 {
+                let joints_all: &mut [JointGraphEdge] =
+                    unsafe { core::slice::from_raw_parts_mut(ctx.joints, ctx.num_joints) };
+                let joint_constraints = unsafe { &mut *ctx.joint_constraints };
+                joint_constraints.accumulate_step_impulses(joints_all);
+                #[cfg(all(feature = "alloc", feature = "dim2"))]
+                if ctx.has_routed_ropes {
                     let routed_ropes = unsafe { &mut *ctx.routed_ropes };
                     let solver_bodies = unsafe { &(*ctx.velocity_solver).solver_bodies };
                     routed_ropes.finish_substep(solver_bodies);
-                    sync.complete(stage, 1, 1);
                 }
-                stage = sync.sync(stage, 1);
+                sync.complete(stage, 1, 1);
             }
+            stage = sync.sync(stage, 1);
         }
 
         /*
