@@ -47,12 +47,8 @@ pub(crate) fn profile_profile_contact(
             )
         }
         (ProfileMode::Solid, ProfileMode::Solid) => {
-            let direct = containment_contact(first, first_to_second, second);
-            let reversed = containment_contact(second, &first_to_second.inverse(), first)
-                .map(Contact::flipped);
-            direct
+            solid_profile_contacts(first, first_to_second, second)
                 .into_iter()
-                .chain(reversed)
                 .max_by(|left, right| left.dist.total_cmp(&right.dist))
                 .unwrap_or_else(|| {
                     contact_from_pair(first_to_second, closest, normal1, distance, 0.0, 0.0)
@@ -60,6 +56,49 @@ pub(crate) fn profile_profile_contact(
         }
         (ProfileMode::Outline, ProfileMode::Solid) => unreachable!(),
     }
+}
+
+pub(crate) fn profile_profile_manifold_contacts(
+    first: &AnalyticProfile,
+    first_to_second: &Pose,
+    second: &AnalyticProfile,
+    prediction: Real,
+) -> Vec<Contact> {
+    let reference = profile_profile_contact(first, first_to_second, second);
+    if reference.dist >= prediction {
+        return Vec::new();
+    }
+    if first.mode() != ProfileMode::Solid || second.mode() != ProfileMode::Solid {
+        return vec![reference];
+    }
+    let mut contacts: Vec<_> = solid_profile_contacts(first, first_to_second, second)
+        .into_iter()
+        .filter(|contact| {
+            contact.dist < prediction
+                && (contact.dist - reference.dist).abs() <= 1.0e-5
+                && contact.normal1.dot(reference.normal1) >= 1.0 - 1.0e-5
+        })
+        .collect();
+    if contacts.len() < 2 {
+        return vec![reference];
+    }
+    let mut tangent = Vector::new(-reference.normal1.y, reference.normal1.x);
+    if tangent.x < -CONTACT_EPSILON || (tangent.x.abs() <= CONTACT_EPSILON && tangent.y < 0.0) {
+        tangent = -tangent;
+    }
+    contacts.sort_by(|left, right| {
+        left.point1
+            .dot(tangent)
+            .total_cmp(&right.point1.dot(tangent))
+            .then_with(|| left.point1.x.total_cmp(&right.point1.x))
+            .then_with(|| left.point1.y.total_cmp(&right.point1.y))
+    });
+    contacts.dedup_by(|left, right| (left.point1 - right.point1).length_squared() <= 1.0e-10);
+    if contacts.len() < 2 {
+        return vec![reference];
+    }
+    let last = contacts.pop().expect("at least two contacts");
+    vec![contacts.remove(0), last]
 }
 
 fn closest_profiles(
@@ -84,11 +123,25 @@ fn closest_profiles(
         .expect("validated analytic profiles contain segments")
 }
 
-fn containment_contact(
+fn solid_profile_contacts(
+    first: &AnalyticProfile,
+    first_to_second: &Pose,
+    second: &AnalyticProfile,
+) -> Vec<Contact> {
+    let mut contacts = containment_contacts(first, first_to_second, second);
+    contacts.extend(
+        containment_contacts(second, &first_to_second.inverse(), first)
+            .into_iter()
+            .map(Contact::flipped),
+    );
+    contacts
+}
+
+fn containment_contacts(
     outer: &AnalyticProfile,
     outer_to_inner: &Pose,
     inner: &AnalyticProfile,
-) -> Option<Contact> {
+) -> Vec<Contact> {
     inner
         .segments()
         .iter()
@@ -104,7 +157,7 @@ fn containment_contact(
                 Contact::new(boundary.point, local, normal1, normal2, -depth)
             })
         })
-        .max_by(|left, right| left.dist.total_cmp(&right.dist))
+        .collect()
 }
 
 fn contact_from_pair(

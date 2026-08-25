@@ -4,7 +4,7 @@ use rapier2d::parry::shape::{Ball, Cuboid, Shape};
 
 use crate::profile::{AnalyticProfile, ProfileMode};
 use crate::profile_box_contacts::solid_profile_box_manifold_contacts;
-use crate::profile_profile_query::profile_profile_contact;
+use crate::profile_profile_query::{profile_profile_contact, profile_profile_manifold_contacts};
 use crate::profile_query::{profile_ball_contact, profile_box_contact};
 
 enum ProfileOther<'a> {
@@ -70,6 +70,12 @@ impl<'a> ProfilePair<'a> {
             ProfileOther::Cuboid(cuboid) if self.profile.mode() == ProfileMode::Solid => {
                 solid_profile_box_manifold_contacts(self.profile, &self.profile_to_other, cuboid)
             }
+            ProfileOther::Profile(profile) => profile_profile_manifold_contacts(
+                self.profile,
+                &self.profile_to_other,
+                profile,
+                prediction,
+            ),
             _ => Vec::new(),
         };
         if contacts.is_empty() {
