@@ -3,7 +3,7 @@
 
 use rapier2d::prelude::*;
 
-fn resting_contact_force(solver_iterations: usize) -> Real {
+fn resting_contact_force(solver_iterations: usize, warmstart_coefficient: Real) -> Real {
     let mut bodies = RigidBodySet::new();
     let mut colliders = ColliderSet::new();
     let mut impulse_joints = ImpulseJointSet::new();
@@ -17,6 +17,7 @@ fn resting_contact_force(solver_iterations: usize) -> Real {
     let mut params = IntegrationParameters::default();
     params.dt = 1.0 / 120.0;
     params.num_solver_iterations = solver_iterations;
+    params.warmstart_coefficient = warmstart_coefficient;
 
     let ground_body = bodies.insert(RigidBodyBuilder::fixed());
     let ground =
@@ -64,12 +65,15 @@ fn resting_contact_force(solver_iterations: usize) -> Real {
 }
 
 #[test]
-fn reported_contact_step_impulse_is_solver_iteration_independent() {
+fn reported_contact_step_impulse_is_solver_iteration_and_warmstart_independent() {
     for iterations in [1, 4, 12, 64] {
-        let force = resting_contact_force(iterations);
-        assert!(
-            (force - 9.8).abs() < 1.0e-3,
-            "{iterations} solver iterations reported {force} N instead of 9.8 N"
-        );
+        for warmstart_coefficient in [0.0, 0.5, 1.0] {
+            let force = resting_contact_force(iterations, warmstart_coefficient);
+            assert!(
+                (force - 9.8).abs() < 1.0e-3,
+                "{iterations} solver iterations and warmstart coefficient \
+                 {warmstart_coefficient} reported {force} N instead of 9.8 N"
+            );
+        }
     }
 }
