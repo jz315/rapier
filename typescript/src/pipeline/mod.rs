@@ -9,3 +9,5 @@ mod event_queue;
 mod physics_hooks;
 mod physics_pipeline;
 mod serialization_pipeline;
+
+mod surface_motion;

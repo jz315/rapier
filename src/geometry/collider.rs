@@ -58,12 +58,25 @@ pub struct Collider {
     pub(crate) material: ColliderMaterial,
     pub(crate) flags: ColliderFlags,
     contact_skin: Real,
+    surface_motion: Option<(Vector, Vector)>,
     contact_force_event_threshold: Real,
     /// User-defined data associated to this collider.
     pub user_data: u128,
 }
 
 impl Collider {
+    /// Prescribed local surface velocity and the outward local unit normal of its active face.
+    pub fn surface_motion(&self) -> Option<(Vector, Vector)> { self.surface_motion }
+
+    /// Configures a moving contact surface; rigid-body motion remains solver-owned.
+    pub fn set_surface_motion(&mut self, velocity: Vector, normal: Vector) {
+        assert!(velocity.iter().all(|v| v.is_finite()) && normal.iter().all(|v| v.is_finite()));
+        assert!((normal.norm_squared() - 1.0).abs() < 1.0e-5);
+        assert!(velocity.dot(&normal).abs() < 1.0e-5);
+        self.surface_motion = Some((velocity, normal));
+        self.set_active_hooks(self.active_hooks() | ActiveHooks::MODIFY_SOLVER_CONTACTS);
+    }
+
     pub(crate) fn reset_internal_references(&mut self) {
         self.changes = ColliderChanges::all();
     }
@@ -130,6 +143,7 @@ impl Collider {
             contact_force_event_threshold,
             user_data,
             contact_skin,
+            surface_motion,
         } = other;
 
         if self.parent.is_none() {
@@ -145,6 +159,7 @@ impl Collider {
         self.flags = *flags;
         self.changes = ColliderChanges::all();
         self.contact_skin = *contact_skin;
+        self.surface_motion = *surface_motion;
     }
 
     /// Which physics hooks are enabled for this collider.
@@ -1451,6 +1466,7 @@ impl ColliderBuilder {
             contact_force_event_threshold: self.contact_force_event_threshold,
             contact_skin: self.contact_skin,
             user_data: self.user_data,
+            surface_motion: None,
         }
     }
 }

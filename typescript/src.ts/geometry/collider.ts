@@ -363,6 +363,15 @@ export class Collider {
      *                   higher the coefficient, the stronger friction forces will be for contacts with the collider
      *                   being built.
      */
+    /** Prescribed local tangential velocity on the face with this outward unit normal. */
+    public setSurfaceMotion(velocity: Vector, normal: Vector) {
+        const v = VectorOps.intoRaw(velocity);
+        const n = VectorOps.intoRaw(normal);
+        this.colliderSet.raw.coSetSurfaceMotion(this.handle, v, n);
+        v.free();
+        n.free();
+    }
+
     public setFriction(friction: number) {
         this.colliderSet.raw.coSetFriction(this.handle, friction);
     }

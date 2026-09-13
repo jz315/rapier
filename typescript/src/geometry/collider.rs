@@ -1207,6 +1207,10 @@ impl RawColliderSet {
         self.map_mut(handle, |co| co.set_restitution(restitution))
     }
 
+    pub fn coSetSurfaceMotion(&mut self, handle: FlatHandle, velocity: &RawVector, normal: &RawVector) {
+        self.map_mut(handle, |collider| collider.set_surface_motion(velocity.0, normal.0));
+    }
+
     pub fn coSetFriction(&mut self, handle: FlatHandle, friction: f32) {
         self.map_mut(handle, |co| co.set_friction(friction))
     }

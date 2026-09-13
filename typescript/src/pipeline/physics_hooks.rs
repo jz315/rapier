@@ -66,7 +66,9 @@ impl PhysicsHooks for RawPhysicsHooks {
             .unwrap_or(false)
     }
 
-    fn modify_solver_contacts(&self, _ctxt: &mut ContactModificationContext) {}
+    fn modify_solver_contacts(&self, ctxt: &mut ContactModificationContext) {
+        super::surface_motion::apply_surface_motion(ctxt);
+    }
 }
 
 /* NOTE: the following is an attempt to make contact modification work.
