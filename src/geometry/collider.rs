@@ -70,9 +70,9 @@ impl Collider {
 
     /// Configures a moving contact surface; rigid-body motion remains solver-owned.
     pub fn set_surface_motion(&mut self, velocity: Vector, normal: Vector) {
-        assert!(velocity.iter().all(|v| v.is_finite()) && normal.iter().all(|v| v.is_finite()));
-        assert!((normal.norm_squared() - 1.0).abs() < 1.0e-5);
-        assert!(velocity.dot(&normal).abs() < 1.0e-5);
+        assert!(velocity.is_finite() && normal.is_finite());
+        assert!((normal.length_squared() - 1.0).abs() < 1.0e-5);
+        assert!(velocity.dot(normal).abs() < 1.0e-5);
         self.surface_motion = Some((velocity, normal));
         self.set_active_hooks(self.active_hooks() | ActiveHooks::MODIFY_SOLVER_CONTACTS);
     }

@@ -9,14 +9,14 @@ impl PhysicsHooks for SurfaceMotionHooks {
 }
 
 pub fn apply_surface_motion(ctxt: &mut ContactModificationContext) {
-    let mut velocity = Vector::zeros();
+    let mut velocity = Vector::ZERO;
     for (handle, sign) in [(ctxt.collider1, 1.0), (ctxt.collider2, -1.0)] {
         let collider = &ctxt.colliders[handle];
         if let Some((local_velocity, local_normal)) = collider.surface_motion() {
             let rotation = collider.position().rotation;
             let outward = rotation * local_normal;
             // Only the specified face drives contacts. Edges and the return face stay passive.
-            if outward.dot(ctxt.normal) * sign > 1.0 - 1.0e-5 {
+            if outward.dot(*ctxt.normal) * sign > 1.0 - 1.0e-5 {
                 velocity += rotation * local_velocity * sign;
             }
         }
