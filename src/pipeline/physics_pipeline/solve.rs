@@ -5,6 +5,7 @@ use crate::alloc_prelude::*;
 
 use crate::dynamics::{
     ImpulseJointSet, IntegrationParameters, IslandManager, MultibodyJointSet, RigidBodySet,
+    SoftBodySet,
 };
 use crate::geometry::{BroadPhaseBvh, ColliderHandle, ColliderSet, NarrowPhase};
 use crate::math::{Real, Vector};
@@ -57,6 +58,7 @@ impl PhysicsPipeline {
         hooks: &dyn PhysicsHooks,
         events: &dyn EventHandler,
         handle_user_changes: bool,
+        soft_bodies: &SoftBodySet,
     ) {
         self.counters.stages.collision_detection_time.resume();
         self.counters.cd.broad_phase_time.resume();
@@ -142,6 +144,7 @@ impl PhysicsPipeline {
             modified_colliders,
             hooks,
             events,
+            Some((soft_bodies, integration_parameters)),
         );
         narrow_phase.compute_intersections(
             islands,
@@ -152,6 +155,7 @@ impl PhysicsPipeline {
             events,
         );
 
+        self.counters.cd.ncontact_pairs = narrow_phase.contact_graph().graph.edges.len();
         self.counters.cd.narrow_phase_time.pause();
         self.counters.stages.collision_detection_time.pause();
     }
@@ -166,6 +170,7 @@ impl PhysicsPipeline {
         colliders: &mut ColliderSet,
         impulse_joints: &mut ImpulseJointSet,
         multibody_joints: &mut MultibodyJointSet,
+        soft_bodies: &mut SoftBodySet,
         events: &dyn EventHandler,
     ) {
         // Persistent islands, two tiers: a bounded local dual search settles each removal (proves
@@ -178,6 +183,7 @@ impl PhysicsPipeline {
             narrow_phase,
             impulse_joints,
             multibody_joints,
+            soft_bodies,
             integration_parameters.length_unit,
         );
         islands.persistent.run_pending_split(bodies);
@@ -236,14 +242,16 @@ impl PhysicsPipeline {
         {
             let dt = integration_parameters.dt;
             let length_unit = integration_parameters.length_unit;
+            let soft_bodies: &SoftBodySet = soft_bodies;
             let observations = &mut self.sleep_observations;
             for handle in islands.active_bodies() {
                 let rb = bodies.index_mut_internal(handle);
-                IslandManager::update_body_energy(rb, dt, length_unit);
+                IslandManager::update_body_energy(rb, soft_bodies, dt, length_unit);
                 let effective_mass = rb.mprops.effective_mass();
                 rb.forces
                     .compute_effective_force_and_torque(gravity, effective_mass);
-                any_extra_iterations |= rb.additional_solver_iterations() > 0;
+                any_extra_iterations |=
+                    rb.additional_solver_iterations() > 0 || rb.additional_pgs_iterations() > 0;
                 bid(rb, &islands.persistent, &mut split_bid);
                 observe(rb, observations);
             }
@@ -253,6 +261,7 @@ impl PhysicsPipeline {
             use rayon::prelude::*;
             let dt = integration_parameters.dt;
             let length_unit = integration_parameters.length_unit;
+            let soft_bodies: &SoftBodySet = soft_bodies;
             self.active_body_handles.clear();
             self.active_body_handles.extend(islands.active_bodies());
             let bodies_ptr = core::sync::atomic::AtomicPtr::new(bodies as *mut RigidBodySet);
@@ -269,11 +278,12 @@ impl PhysicsPipeline {
                     let mut observations = Vec::new();
                     for handle in chunk {
                         let rb = bodies.index_mut_internal(*handle);
-                        IslandManager::update_body_energy(rb, dt, length_unit);
+                        IslandManager::update_body_energy(rb, soft_bodies, dt, length_unit);
                         let effective_mass = rb.mprops.effective_mass();
                         rb.forces
                             .compute_effective_force_and_torque(gravity, effective_mass);
-                        any_extra |= rb.additional_solver_iterations() > 0;
+                        any_extra |= rb.additional_solver_iterations() > 0
+                            || rb.additional_pgs_iterations() > 0;
                         bid(rb, persistent, &mut chunk_bid);
                         observe(rb, &mut observations);
                     }
@@ -303,6 +313,7 @@ impl PhysicsPipeline {
             narrow_phase,
             impulse_joints,
             multibody_joints,
+            soft_bodies,
             &self.sleep_observations,
         );
 
@@ -313,8 +324,10 @@ impl PhysicsPipeline {
             any_extra_iterations,
             bodies,
             narrow_phase,
+            colliders,
             impulse_joints,
             multibody_joints,
+            soft_bodies,
         );
 
         #[cfg(all(feature = "alloc", feature = "dim2"))]
@@ -356,7 +369,7 @@ impl PhysicsPipeline {
             .pause();
 
         // NOTE: world-space mass-properties are NOT recomputed before the solver: they were
-        // refreshed by `advance_to_final_positions`, the user-changes handler, or multibody forward
+        // updated by `advance_to_final_positions`, the user-changes handler, or multibody forward
         // kinematics; effective forces by the fused traversal above.
         self.counters.stages.solver_time.resume();
 
@@ -381,6 +394,7 @@ impl PhysicsPipeline {
                 num_threads,
                 island_id,
                 &mut self.counters,
+                gravity,
                 integration_parameters,
                 islands,
                 bodies,
@@ -390,10 +404,18 @@ impl PhysicsPipeline {
                 &self.joint_constraint_indices,
                 joint_assembly_epoch,
                 multibody_joints,
+                soft_bodies,
+                narrow_phase,
+                colliders,
                 unsafe { contact_color_masks.as_slice() },
                 #[cfg(all(feature = "alloc", feature = "dim2"))]
                 &mut self.routed_rope_constraints,
             );
+            // The soft-body surface contacts live outside the solver contact graph: write their
+            // impulses back to the manifolds (contact-force events, warm start) here.
+            self.staged_solver
+                .soft_constraints
+                .writeback_contacts(narrow_phase);
         }
 
         // Generate contact force events if needed, and update each pair's

@@ -26,6 +26,7 @@ mod debug_box_ball2;
 mod debug_compression2;
 mod debug_intersection2;
 mod debug_many_colliders2;
+mod debug_self_intersect2;
 mod debug_total_overlap2;
 mod debug_vertical_column2;
 mod drum2;
@@ -55,7 +56,25 @@ mod s2d_high_mass_ratio_3;
 mod s2d_joint_grid;
 mod s2d_pyramid;
 mod sensor2;
+mod soft_blobs2;
+mod soft_bodies2;
+mod soft_cutting2;
+mod soft_fem2;
+mod soft_force_tearing2;
+mod soft_jelly2;
+mod soft_joints2;
+// The letters come from a tessellated SVG (usvg), which doesn't build for wasm.
+#[cfg(not(target_arch = "wasm32"))]
+mod soft_letters2;
+mod soft_pile2;
+mod soft_plasticity2;
+mod soft_stress2;
+mod soft_surface2;
+mod soft_tearing2;
+mod soft_thin_features2;
 mod stress_tests;
+// Tessellates an SVG with usvg, which doesn't build for wasm.
+#[cfg(not(target_arch = "wasm32"))]
 mod trimesh2;
 mod voxels2;
 
@@ -67,10 +86,16 @@ type ExampleFn =
     for<'a> fn(&'a mut TestbedViewer) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + 'a>>;
 
 /// `(group, name, run-fn)` -> `(ExampleEntry, ExampleFn)`.
+/// Entries accept attributes so an example can be `#[cfg]`-ed out (e.g. on wasm).
 macro_rules! examples {
-    ($($group:expr, $name:expr, $run:path);* $(;)?) => {
-        vec![ $( (ExampleEntry::new($group, $name), (|v| Box::pin($run(v))) as ExampleFn) ),* ]
-    };
+    ($($(#[$meta:meta])* $group:ident, $name:expr, $run:path);* $(;)?) => {{
+        let mut entries: Vec<(ExampleEntry, ExampleFn)> = Vec::new();
+        $(
+            $(#[$meta])*
+            entries.push((ExampleEntry::new($group, $name), (|v| Box::pin($run(v))) as ExampleFn));
+        )*
+        entries
+    }};
 }
 
 #[kiss3d::main]
@@ -79,11 +104,14 @@ pub async fn main() {
     const DYNAMICS: &str = "Dynamics";
     const JOINTS: &str = "Joints";
     const CONTROLS: &str = "Controls";
+    const SOFT: &str = "Soft bodies";
     const DEBUG: &str = "Debug";
     const S2D: &str = "Inspired by Solver 2D";
     const STRESS: &str = "Stress tests";
-    const B2D: &str = "Box2D benchmarks";
+    const B2D: &str = "Third-party benchmarks";
 
+    // Not a `vec![]`: entries can be individually `#[cfg]`-ed out.
+    #[allow(clippy::vec_init_then_push)]
     let examples: Vec<(ExampleEntry, ExampleFn)> = examples![
         // ── Collisions ──────────────────────────────────────────────────────
         COLLISIONS, "Add remove", add_remove2::run;
@@ -95,6 +123,7 @@ pub async fn main() {
         COLLISIONS, "Convex polygons", convex_polygons2::run;
         COLLISIONS, "Heightfield", heightfield2::run;
         COLLISIONS, "Polyline", polyline2::run;
+        #[cfg(not(target_arch = "wasm32"))]
         COLLISIONS, "Trimesh", trimesh2::run;
         COLLISIONS, "Voxels", voxels2::run;
         COLLISIONS, "Collision groups", collision_groups2::run;
@@ -111,6 +140,22 @@ pub async fn main() {
         JOINTS, "Joint motor position", joint_motor_position2::run;
         JOINTS, "Inverse kinematics", inverse_kinematics2::run;
         JOINTS, "Multi Pendulum", multi_pendulum2::run;
+        // ── Soft bodies ─────────────────────────────────────────────────────
+        SOFT, "Soft bodies", soft_bodies2::run;
+        SOFT, "Blobs", soft_blobs2::run;
+        SOFT, "Jelly", soft_jelly2::run;
+        SOFT, "Deformable polylines", soft_surface2::run;
+        SOFT, "Soft pile", soft_pile2::run;
+        SOFT, "Thin features", soft_thin_features2::run;
+        #[cfg(not(target_arch = "wasm32"))]
+        SOFT, "Soft letters", soft_letters2::run;
+        SOFT, "Plasticity", soft_plasticity2::run;
+        SOFT, "Tearing", soft_tearing2::run;
+        SOFT, "Force tearing", soft_force_tearing2::run;
+        SOFT, "Cutting", soft_cutting2::run;
+        SOFT, "Stress coloring", soft_stress2::run;
+        SOFT, "Soft FEM", soft_fem2::run;
+        SOFT, "Soft joints", soft_joints2::run;
         // ── Controls ────────────────────────────────────────────────────────
         CONTROLS, "Character controller", character_controller2::run;
         // ── Debug ───────────────────────────────────────────────────────────
@@ -121,6 +166,7 @@ pub async fn main() {
         DEBUG, "Many colliders", debug_many_colliders2::run;
         DEBUG, "Total overlap", debug_total_overlap2::run;
         DEBUG, "Vertical column", debug_vertical_column2::run;
+        DEBUG, "Self intersect", debug_self_intersect2::run;
         // ── Inspired by Solver2D ────────────────────────────────────────────
         S2D, "High mass ratio 1", s2d_high_mass_ratio_1::run;
         S2D, "High mass ratio 2", s2d_high_mass_ratio_2::run;
@@ -159,6 +205,13 @@ pub async fn main() {
         STRESS, "(Stress test) joint ball", stress_tests::joint_ball2::run;
         STRESS, "(Stress test) joint fixed", stress_tests::joint_fixed2::run;
         STRESS, "(Stress test) joint prismatic", stress_tests::joint_prismatic2::run;
+        STRESS, "Soft blobs", stress_tests::soft_blobs2::run;
+        STRESS, "Soft jellies", stress_tests::soft_jellies2::run;
+        STRESS, "Soft ropes", stress_tests::soft_ropes2::run;
+        STRESS, "Soft strips", stress_tests::soft_strips2::run;
+        STRESS, "Soft cloth on Keva tower", stress_tests::soft_cloth_keva2::run;
+        STRESS, "Soft slab shower", stress_tests::soft_slab2::run;
+        STRESS, "Soft FEM beams", stress_tests::soft_fem_beams2::run;
     ];
 
     let (entries, run_fns): (Vec<_>, Vec<ExampleFn>) = examples.into_iter().unzip();

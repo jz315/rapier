@@ -650,6 +650,7 @@ mod tests {
             &mut crate::geometry::ColliderSet::new(),
             &mut crate::dynamics::ImpulseJointSet::new(),
             &mut crate::dynamics::MultibodyJointSet::new(),
+            &mut crate::dynamics::SoftBodySet::new(),
             true,
         );
         constraint.prepare(&bodies);

@@ -46,6 +46,7 @@ fn resting_contact_force(solver_iterations: usize, warmstart_coefficient: Real) 
             &mut colliders,
             &mut impulse_joints,
             &mut multibody_joints,
+            &mut SoftBodySet::new(),
             &mut ccd,
             &(),
             &(),
@@ -56,7 +57,7 @@ fn resting_contact_force(solver_iterations: usize, warmstart_coefficient: Real) 
         .contact_pair(ground, block)
         .expect("resting block must contact ground");
     let impulse: Real = pair
-        .manifolds
+        .manifolds()
         .iter()
         .flat_map(|manifold| &manifold.points)
         .map(|point| point.data.impulse)

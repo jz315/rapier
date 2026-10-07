@@ -7,6 +7,9 @@ use std::pin::Pin;
 
 mod utils;
 
+// Examples gated on `not(target_arch = "wasm32")` load meshes, robot
+// descriptions or scene dumps from disk, so they can't run in a browser.
+
 mod b3d_joint_grid;
 mod b3d_junkyard;
 mod b3d_large_pyramid;
@@ -19,6 +22,7 @@ mod ccd3;
 mod character_controller3;
 mod collision_groups3;
 mod compound3;
+#[cfg(not(target_arch = "wasm32"))]
 mod convex_decomposition3;
 mod convex_polyhedron3;
 mod damping3;
@@ -31,6 +35,7 @@ mod debug_boxes3;
 mod debug_chain_high_mass_ratio3;
 mod debug_cube_high_mass_ratio3;
 mod debug_cylinder3;
+#[cfg(not(target_arch = "wasm32"))]
 mod debug_deserialize3;
 mod debug_disabled3;
 mod debug_dynamic_collider_add3;
@@ -43,6 +48,7 @@ mod debug_multibody_ang_motor_pos3;
 mod debug_pop3;
 mod debug_prismatic3;
 mod debug_rollback3;
+mod debug_self_intersect3;
 mod debug_shape_modification3;
 mod debug_sleeping_kinematic3;
 mod debug_thin_cube_on_mesh3;
@@ -50,6 +56,7 @@ mod debug_triangle3;
 mod debug_trimesh3;
 mod debug_two_cubes3;
 mod domino3;
+#[cfg(not(target_arch = "wasm32"))]
 mod dynamic_trimesh3;
 mod fountain3;
 mod gyroscopic3;
@@ -59,7 +66,9 @@ mod joint_motor_position3;
 mod joints3;
 mod keva3;
 mod locked_rotations3;
+#[cfg(not(target_arch = "wasm32"))]
 mod mjcf3;
+#[cfg(not(target_arch = "wasm32"))]
 mod mujoco_menagerie3;
 mod newton_cradle3;
 mod one_way_platforms3;
@@ -68,9 +77,25 @@ mod primitives3;
 mod restitution3;
 mod rope_joints3;
 mod sensor3;
+mod soft_bodies3;
+mod soft_cloth3;
+mod soft_cloth_stress3;
+mod soft_dress3;
+mod soft_fem3;
+mod soft_jelly3;
+mod soft_joints3;
+mod soft_meshes3;
+mod soft_pile3;
+mod soft_plasticity3;
+mod soft_surface3;
+mod soft_tearing3;
+mod soft_thin_features3;
+#[cfg(not(target_arch = "wasm32"))]
+mod soft_trimesh3;
 mod spring_joints3;
 mod stress_tests;
 mod trimesh3;
+#[cfg(not(target_arch = "wasm32"))]
 mod urdf3;
 mod vehicle_controller3;
 mod vehicle_joints3;
@@ -82,10 +107,16 @@ type ExampleFn =
     for<'a> fn(&'a mut TestbedViewer) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + 'a>>;
 
 /// `(group, name, run-fn)` -> `(ExampleEntry, ExampleFn)`.
+/// Entries accept attributes so an example can be `#[cfg]`-ed out (e.g. on wasm).
 macro_rules! examples {
-    ($($group:expr, $name:expr, $run:path);* $(;)?) => {
-        vec![ $( (ExampleEntry::new($group, $name), (|v| Box::pin($run(v))) as ExampleFn) ),* ]
-    };
+    ($($(#[$meta:meta])* $group:ident, $name:expr, $run:path);* $(;)?) => {{
+        let mut entries: Vec<(ExampleEntry, ExampleFn)> = Vec::new();
+        $(
+            $(#[$meta])*
+            entries.push((ExampleEntry::new($group, $name), (|v| Box::pin($run(v))) as ExampleFn));
+        )*
+        entries
+    }};
 }
 
 #[kiss3d::main]
@@ -94,11 +125,14 @@ pub async fn main() {
     const DYNAMICS: &str = "Dynamics";
     const JOINTS: &str = "Joints";
     const CONTROLS: &str = "Controls";
+    const SOFT: &str = "Soft bodies";
     const DEBUG: &str = "Debug";
     const ROBOTICS: &str = "Robotics";
     const STRESS: &str = "Stress tests";
-    const B3D: &str = "Box3D benchmarks";
+    const B3D: &str = "Third-party benchmarks";
 
+    // Not a `vec![]`: entries can be individually `#[cfg]`-ed out.
+    #[allow(clippy::vec_init_then_push)]
     let examples: Vec<(ExampleEntry, ExampleFn)> = examples![
         // ── Collisions ──────────────────────────────────────────────────────
         COLLISIONS, "Fountain", fountain3::run;
@@ -109,9 +143,11 @@ pub async fn main() {
         COLLISIONS, "Platform", platform3::run;
         COLLISIONS, "Sensor", sensor3::run;
         COLLISIONS, "Compound", compound3::run;
+        #[cfg(not(target_arch = "wasm32"))]
         COLLISIONS, "Convex decomposition", convex_decomposition3::run;
         COLLISIONS, "Convex polyhedron", convex_polyhedron3::run;
         COLLISIONS, "TriMesh", trimesh3::run;
+        #[cfg(not(target_arch = "wasm32"))]
         COLLISIONS, "Dynamic trimeshes", dynamic_trimesh3::run;
         COLLISIONS, "Heightfield", heightfield3::run;
         COLLISIONS, "Voxels", voxels3::run;
@@ -130,13 +166,32 @@ pub async fn main() {
         JOINTS, "Spring Joints", spring_joints3::run;
         JOINTS, "Joint Motor Position", joint_motor_position3::run;
         JOINTS, "Inverse kinematics", inverse_kinematics3::run;
+        // ── Soft bodies ─────────────────────────────────────────────────────
+        SOFT, "Soft bodies", soft_bodies3::run;
+        SOFT, "Cloth", soft_cloth3::run;
+        SOFT, "Jelly", soft_jelly3::run;
+        SOFT, "Soft joints", soft_joints3::run;
+        SOFT, "Cluster meshes", soft_meshes3::run;
+        SOFT, "Deformable trimeshes", soft_surface3::run;
+        SOFT, "Soft pile", soft_pile3::run;
+        SOFT, "Thin features", soft_thin_features3::run;
+        SOFT, "Cloth stress", soft_cloth_stress3::run;
+        SOFT, "Plasticity", soft_plasticity3::run;
+        SOFT, "Tearing", soft_tearing3::run;
+        SOFT, "Dancing dress", soft_dress3::run;
+        SOFT, "Soft FEM", soft_fem3::run;
+        #[cfg(not(target_arch = "wasm32"))]
+        SOFT, "Soft trimeshes", soft_trimesh3::run;
         // ── Controls ────────────────────────────────────────────────────────
         CONTROLS, "Character controller", character_controller3::run;
         CONTROLS, "Vehicle controller", vehicle_controller3::run;
         CONTROLS, "Vehicle joints", vehicle_joints3::run;
         // ── Robotics ────────────────────────────────────────────────────────
+        #[cfg(not(target_arch = "wasm32"))]
         ROBOTICS, "URDF", urdf3::run;
+        #[cfg(not(target_arch = "wasm32"))]
         ROBOTICS, "MJCF", mjcf3::run;
+        #[cfg(not(target_arch = "wasm32"))]
         ROBOTICS, "Mujoco Menagerie", mujoco_menagerie3::run;
         // ── Debug ───────────────────────────────────────────────────────────
         DEBUG, "Angular limits", debug_angular_limits3::run;
@@ -152,6 +207,7 @@ pub async fn main() {
         DEBUG, "Dyn. collider add", debug_dynamic_collider_add3::run;
         DEBUG, "Friction", debug_friction3::run;
         DEBUG, "Internal edges", debug_internal_edges3::run;
+        DEBUG, "Self intersect", debug_self_intersect3::run;
         DEBUG, "Long chain", debug_long_chain3::run;
         DEBUG, "High mass ratio: chain", debug_chain_high_mass_ratio3::run;
         DEBUG, "High mass ratio: cube", debug_cube_high_mass_ratio3::run;
@@ -164,6 +220,7 @@ pub async fn main() {
         DEBUG, "Rollback", debug_rollback3::run;
         DEBUG, "Shape modification", debug_shape_modification3::run;
         DEBUG, "Sleeping kinematics", debug_sleeping_kinematic3::run;
+        #[cfg(not(target_arch = "wasm32"))]
         DEBUG, "Deserialize", debug_deserialize3::run;
         DEBUG, "Multibody ang. motor pos.", debug_multibody_ang_motor_pos3::run;
         // ── Stress tests ────────────────────────────────────────────────────
@@ -189,6 +246,13 @@ pub async fn main() {
         STRESS, "Many pyramids", stress_tests::many_pyramids3::run;
         STRESS, "Keva tower", stress_tests::keva3::run;
         STRESS, "Ray cast", stress_tests::ray_cast3::run;
+        STRESS, "Soft blobs", stress_tests::soft_blobs3::run;
+        STRESS, "Soft jellies", stress_tests::soft_jellies3::run;
+        STRESS, "Soft ropes", stress_tests::soft_ropes3::run;
+        STRESS, "Soft cloth drape", stress_tests::soft_cloth_drape3::run;
+        STRESS, "Soft cloth on Keva tower", stress_tests::soft_cloth_keva3::run;
+        STRESS, "Soft slab shower", stress_tests::soft_slab3::run;
+        STRESS, "Soft FEM beams", stress_tests::soft_fem_beams3::run;
         // ── Box3D benchmarks (ports of box3d/benchmark) ─────────────────────
         B3D, "Large pyramid", b3d_large_pyramid::run;
         B3D, "Many pyramids", b3d_many_pyramids::run;

@@ -31,6 +31,8 @@ pub(crate) fn conservative_cast(
                 witness2: contact.point2,
                 normal1: contact.normal1,
                 normal2: contact.normal2,
+                subshape1: 0,
+                subshape2: 0,
                 status,
             });
         }

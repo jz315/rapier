@@ -3,7 +3,8 @@ use rapier2d::math::{Pose, Real, Vector};
 use rapier2d::parry::query::details::{NormalConstraints, ShapeCastOptions};
 use rapier2d::parry::query::{
     ClosestPoints, Contact, ContactManifold, ContactManifoldsWorkspace, NonlinearRigidMotion,
-    PersistentQueryDispatcher, QueryDispatcher, ShapeCastHit, Unsupported,
+    PersistentQueryDispatcher, QueryDispatcher, ShapeCastHit, ShapeDistance, ShapeIntersection,
+    Unsupported,
 };
 use rapier2d::parry::shape::Shape;
 
@@ -30,8 +31,10 @@ impl QueryDispatcher for AnalyticProfileDispatcher {
         position12: &Pose,
         shape1: &dyn Shape,
         shape2: &dyn Shape,
-    ) -> Result<bool, Unsupported> {
-        Ok(Self::pair(position12, shape1, shape2)?.gap() <= 0.0)
+    ) -> Result<ShapeIntersection, Unsupported> {
+        Ok(ShapeIntersection::new(
+            Self::pair(position12, shape1, shape2)?.gap() <= 0.0,
+        ))
     }
 
     fn distance(
@@ -39,8 +42,10 @@ impl QueryDispatcher for AnalyticProfileDispatcher {
         position12: &Pose,
         shape1: &dyn Shape,
         shape2: &dyn Shape,
-    ) -> Result<Real, Unsupported> {
-        Ok(Self::pair(position12, shape1, shape2)?.gap().max(0.0))
+    ) -> Result<ShapeDistance, Unsupported> {
+        Ok(ShapeDistance::new(
+            Self::pair(position12, shape1, shape2)?.gap().max(0.0),
+        ))
     }
 
     fn contact(
